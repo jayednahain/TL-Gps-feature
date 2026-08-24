@@ -24,8 +24,12 @@ python3 -m http.server 8000
 
 The site is deployed by `.github/workflows/pages.yml` on every push to `main`.
 
-The workflow enables Pages itself (`configure-pages` with `enablement: true`), so no
-manual setup is needed. If it ever fails to, set it by hand at
+One-time setup, required before the first deploy can succeed:
 **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
+This step cannot be automated. The workflow's `GITHUB_TOKEN` can deploy to an
+existing Pages site, but creating one needs repo-admin credentials, so
+`configure-pages` with `enablement: true` fails with
+`Resource not accessible by integration`.
 
 Live URL: https://jayednahain.github.io/TL-Gps-feature/
