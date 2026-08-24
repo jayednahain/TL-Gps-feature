@@ -1,0 +1,2465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPS Live Tracking — Developer Guide</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <div class="brand"><span class="brand-dot"></span>GPS Live Tracking</div>
+          <div class="brand-sub">TlReactOwner · developer guide</div>
+        </div>
+        <div class="sidebar-search">
+          <input type="text" id="nav-filter" placeholder="Filter sections…" />
+        </div>
+        <nav class="sidebar-nav" id="sidebar-nav">
+          <div class="nav-group">
+            <div class="nav-group-label">Start here</div>
+            <a class="nav-link" data-target="sec-0"><span class="n">§0</span>The one thing</a>
+            <a class="nav-link" data-target="sec-1"><span class="n">§1</span>Entry points</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-label">Architecture</div>
+            <a class="nav-link" data-target="sec-2"><span class="n">§2</span>Component tree</a>
+            <a class="nav-link" data-target="sec-4"><span class="n">§4</span>GpsBaseComponent</a>
+            <a class="nav-link" data-target="sec-5"><span class="n">§5</span>Class variables</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-label">Live tracking</div>
+            <a class="nav-link" data-target="sec-3"><span class="n">§3</span>The live cycle</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-label">Playback</div>
+            <a class="nav-link" data-target="sec-6"
+              ><span class="n">§6</span>Playback &amp; native</a
+            >
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-label">API system</div>
+            <a class="nav-link" data-target="sec-7"><span class="n">§7</span>Model API system</a>
+            <a class="nav-link" data-target="sec-8"><span class="n">§8</span>Master table</a>
+            <a class="nav-link" data-target="sec-9"><span class="n">§9</span>Quick index</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-label">Reference</div>
+            <a class="nav-link" data-target="sec-10"><span class="n">§10</span>Globals</a>
+            <a class="nav-link" data-target="sec-11"><span class="n">§11</span>Gotchas</a>
+            <a class="nav-link" data-target="sec-12"><span class="n">§12</span>File map</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <div class="nav-toggle" id="nav-toggle-btn">☰ &nbsp;Sections</div>
+
+        <!-- ======================= HERO / SECTION 0 ======================= -->
+        <section class="section hero" id="sec-0">
+          <div class="hero-kicker">Developer guide · GPS module</div>
+          <h1>GPS Live Tracking</h1>
+          <p class="lede">
+            Everything a new engineer needs before touching the GPS screens: which API feeds which
+            piece of UI, and how the live map actually keeps itself up to date.
+          </p>
+
+          <div class="hero-fact">
+            <div class="hero-fact-label">⚠ Read this before anything else</div>
+            <h2>There is no <code>setInterval</code> anywhere in the GPS module.</h2>
+            <p>
+              The live map <em>looks</em> like it polls every 10 seconds. It doesn't. It's a
+              self-perpetuating callback chain — the API result triggers a 10-second marker
+              animation, and the animation's own completion callback is what fires the next API
+              call. Watch it happen below.
+            </p>
+
+            <div class="diagram-wrap">
+              <svg
+                id="loop-svg"
+                class="diagram-svg"
+                width="300"
+                height="300"
+                viewBox="0 0 300 300"
+                role="img"
+                aria-label="Animated diagram of the GPS live-tracking loop: an API call returns a point, a marker animates to it over ten seconds, the animation's completion callback fires, and that callback calls the API again — repeating forever with no timer involved."
+              >
+                <circle cx="150" cy="150" r="118" fill="none" stroke="#1a212c" stroke-width="10" />
+                <path
+                  id="arc-network"
+                  fill="none"
+                  stroke="var(--accent-signal)"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                />
+                <path
+                  id="arc-animate"
+                  fill="none"
+                  stroke="var(--accent-route)"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                />
+                <circle id="loop-dot" cx="150" cy="32" r="7" fill="#fff" />
+                <text
+                  x="150"
+                  y="138"
+                  text-anchor="middle"
+                  font-family="JetBrains Mono, monospace"
+                  font-size="11"
+                  fill="#5c6577"
+                  id="phase-label"
+                >
+                  PHASE
+                </text>
+                <text
+                  x="150"
+                  y="168"
+                  text-anchor="middle"
+                  font-family="Space Grotesk, sans-serif"
+                  font-size="26"
+                  font-weight="600"
+                  fill="#e8ebf2"
+                  id="phase-value"
+                >
+                  10.0s
+                </text>
+                <text
+                  x="150"
+                  y="188"
+                  text-anchor="middle"
+                  font-family="JetBrains Mono, monospace"
+                  font-size="10"
+                  fill="#5c6577"
+                  id="phase-sub"
+                >
+                  liveTrackingTimer
+                </text>
+              </svg>
+              <div class="diagram-legend">
+                <div class="item">
+                  <span class="sw sw-signal"></span>
+                  <div>
+                    <strong style="color: var(--text-primary)">① → ④ API round-trip</strong
+                    ><br />Location fetched, then reverse-geocoded. Fast, variable duration.
+                  </div>
+                </div>
+                <div class="item">
+                  <span class="sw sw-route"></span>
+                  <div>
+                    <strong style="color: var(--text-primary)">② → ③ Marker animates</strong
+                    ><br />Fixed 10,000ms. This duration <em>is</em> the "refresh interval" you
+                    observe.
+                  </div>
+                </div>
+                <div class="item">
+                  <span class="sw sw-neutral"></span>
+                  <div>
+                    <strong style="color: var(--text-primary)">The white dot</strong><br /><code
+                      >onAnimationComplete()</code
+                    >
+                    — when it reaches ③, that callback fires the next API call.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="diagram-caption" id="loop-caption">
+              running · <span id="loop-elapsed">0s</span> elapsed ·
+              <span id="loop-cycles">0</span> cycles completed
+            </div>
+          </div>
+
+          <div class="code-block" style="margin-top: 22px">
+            <div class="code-label">
+              <span>terminal</span
+              ><button class="copy-btn" data-copy-target="grep-code">Copy</button>
+            </div>
+            <pre><code id="grep-code">grep -rn "setInterval" app/views/Gps app/views/GpsTracker app/components/GPSMarker app/model/Gps.js
+# → zero matches</code></pre>
+          </div>
+
+          <div class="callout callout-info">
+            <div class="ic">💡</div>
+            <p>
+              API returns a point → point is plotted &amp; the marker is animated to it (10s) → the
+              animation's completion callback fires → that callback calls the API again. If the
+              animation is slow, the next request is late. If the animation is cancelled,
+              <strong>the chain stops forever</strong> until something restarts it. Everything else
+              in this module follows from that one fact.
+            </p>
+          </div>
+        </section>
+
+        <!-- SEC1 -->
+        <section class="section" id="sec-1">
+          <div class="eyebrow"><span class="num">§1</span>Entry points</div>
+          <h2 class="h-section">How a user reaches GPS</h2>
+          <p class="section-intro">
+            Four doors into the feature, all landing on the same root screen.
+          </p>
+
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>Code</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary">Home → product tile "GPS device"</td>
+                  <td><code>home.js:1878</code> → <code>onPressProduct</code></td>
+                  <td>Product detail / purchase flow</td>
+                </tr>
+                <tr>
+                  <td class="primary">Home → push notification <code>GPS Access Share</code></td>
+                  <td><code>home.js:1364</code></td>
+                  <td>
+                    <code>GpsTrackerLandingPage</code> with
+                    <code>redirectToPageName: 'shared'</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">
+                    Home → push notification <code>gps_engine_lock</code> /
+                    <code>gps_engine_unlock</code>
+                  </td>
+                  <td><code>home.js:1445</code></td>
+                  <td><code>Actions.GpsTrackerLandingPage()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary">Drawer / dashboard menu</td>
+                  <td><code>MenuBarGpsTrackerDashboard</code></td>
+                  <td><code>GpsTrackerLandingPage</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            All GPS screens are registered in <code>MainNavigator.js:489-519</code> under the
+            <code>{/* gps */}</code> comment.
+            <strong><code>GpsTrackerLandingPage</code> is the root of the feature</strong> —
+            whichever door you come through, this is where you land first.
+          </p>
+        </section>
+        <!-- SEC2 -->
+        <section class="section section-full" id="sec-2">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§2</span>Architecture</div>
+            <h2 class="h-section">Route / page / component tree</h2>
+            <p class="section-intro">
+              Click any branch to expand it. <code>GpsActiveMap</code> is flagged — that's the
+              live-tracking screen §3 is entirely about.
+            </p>
+          </div>
+
+          <div class="tree constrain">
+            <details open>
+              <summary>GpsTrackerLandingPage <span class="tag">ROOT</span></summary>
+              <div class="kids">
+                <div class="leaf">
+                  — owns the truck list + counts
+                  <span class="note"
+                    >(calls <code>truckInfoByOwnerID</code> once, splits trucks into 6
+                    buckets)</span
+                  >
+                </div>
+                <div class="leaf">
+                  MenuBarGpsTrackerDashboard
+                  <span class="note">— Map-tab / List-tab switcher + back</span>
+                </div>
+
+                <details>
+                  <summary>
+                    [Map tab] GpsDashboardMap <span class="tag">extends GpsBaseComponent</span>
+                  </summary>
+                  <div class="kids">
+                    <div class="leaf">
+                      MapView (react-native-maps) → Marker × N + CustomCalloutTruck
+                      <span class="note">one pin per active-subscription truck</span>
+                    </div>
+                    <div class="leaf">
+                      ListChips
+                      <span class="note">total / active / inactive / shared / expired / new</span>
+                    </div>
+                    <div class="leaf">
+                      ModalBottomSheetGpsTruckDetails
+                      <span class="note">opens on marker press; "Tracking" → GpsActiveMap</span>
+                    </div>
+                    <div class="leaf">
+                      ModalBottomSheetConfirmation
+                      <span class="note">no-truck / no-device / no-subscription states</span>
+                    </div>
+                    <div class="leaf">
+                      ModalLoadingScreen · ModalShowApiErrorWithTruckLogo ·
+                      ModalNoInternetConnection
+                    </div>
+                  </div>
+                </details>
+
+                <details>
+                  <summary>
+                    [List tab] GpsTrackerTruckListDashboard
+                    <span class="tag">chip-driven, 6 lists</span>
+                  </summary>
+                  <div class="kids">
+                    <div class="leaf">ListChips</div>
+                    <div class="leaf">
+                      GpsTrackerAllTruckList <span class="tag">extends GpsBaseComponent</span>
+                    </div>
+                    <div class="leaf">
+                      GpsTrackerActiveTruckList <span class="tag">extends GpsBaseComponent</span>
+                    </div>
+                    <div class="leaf">
+                      GpsTrackerInactiveTruckList <span class="tag">extends GpsBaseComponent</span>
+                    </div>
+                    <div class="leaf">
+                      GpsTrackerExpiredTruckList <span class="tag">extends GpsBaseComponent</span>
+                    </div>
+                    <div class="leaf">GpsTrackerNewSubscriptionTruckList</div>
+                    <div class="leaf">
+                      GpsTrackerSharedTruckList
+                      <span class="note">tabbed: shared-by-me / shared-with-me</span>
+                    </div>
+                    <div class="leaf" style="padding-left: 38px">
+                      ↳ every list renders <code>CardGpsTrackerDashboard</code> → tap →
+                      <code>truckInfo</code> → <code>Actions.GpsActiveMap(...)</code>
+                    </div>
+                  </div>
+                </details>
+
+                <details>
+                  <summary>
+                    GpsActiveMap
+                    <span class="tag star"
+                      >★ extends GpsBaseComponent — THE LIVE TRACKING SCREEN</span
+                    >
+                  </summary>
+                  <div class="kids">
+                    <div class="leaf">
+                      MenuBarDropDown
+                      <span class="note">truck-number dropdown — switch truck in place</span>
+                    </div>
+                    <div class="leaf">
+                      MapView → AnimatedMarker (Polyline + Marker)
+                      <span class="note">drives the whole live loop</span>
+                    </div>
+                    <div class="leaf">Top-right icons: MapDirection · TrafficLight · MapChange</div>
+                    <div class="leaf">ButtonVertical (zoom ±) · Chips "track" (recenter)</div>
+
+                    <details>
+                      <summary>
+                        BottomSheetModal <span class="tag">3 snap points: 100% / ~36% / 90px</span>
+                      </summary>
+                      <div class="kids">
+                        <details>
+                          <summary>
+                            HEADER
+                            <span class="note"
+                              >always visible, fed by <code>this.truckObject</code></span
+                            >
+                          </summary>
+                          <div class="kids">
+                            <div class="leaf">
+                              BadgeRoundedGps (truckStatus) + last engine-off time
+                            </div>
+                            <div class="leaf">
+                              GpsFeatureView (gps_tracking) + GSMNetworkStatus (gsm_strength)
+                            </div>
+                            <div class="leaf">truck no / model / "Share Location"</div>
+                            <div class="leaf">
+                              speed · TotalDistanceShow (daysMileage) · ignition icon
+                            </div>
+                            <div class="leaf">device-removed warning · engine-locked warning</div>
+                            <div class="leaf">"Last update: &lt;time&gt;, &lt;address&gt;"</div>
+                          </div>
+                        </details>
+                        <details>
+                          <summary>BODY → GpsTrackerTruckDetailsPage</summary>
+                          <div class="kids">
+                            <div class="leaf">
+                              Tab 1 "History" → CardGpsHistroy (→ GpsPlayBackMap) + ListCardStoppage
+                            </div>
+                            <details>
+                              <summary>
+                                Tab 2 "Settings" → GpsTrackerTruckDetailsSettingsTab
+                              </summary>
+                              <div class="kids">
+                                <div class="leaf">GpsTrackerEngineLockOrUnlock</div>
+                                <div class="leaf">
+                                  GeoFencing → GeoFenceSelectAddress → GeoFenceAdd → GeoFenceEdit
+                                </div>
+                                <div class="leaf">GpsAlertSettings</div>
+                                <div class="leaf">
+                                  GpsTrackerSharedTruckProfile / …Other → GpsTrackerShareSelectPage
+                                </div>
+                                <div class="leaf">
+                                  GpsDigitalInvoiceTab (device / subscription invoices)
+                                </div>
+                                <div class="leaf">
+                                  StandardPackage / GpsPackagePurchase / GpsPackagePayment
+                                </div>
+                              </div>
+                            </details>
+                          </div>
+                        </details>
+                      </div>
+                    </details>
+
+                    <div class="leaf">
+                      Modals: SpyVoice · TimeLimit · ShareLink · ChangeMapType · Loading · ApiError
+                      · NoInternet
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </details>
+
+            <details style="margin-top: 14px">
+              <summary>
+                GpsPlayBackMap
+                <span class="tag"
+                  >separate stack screen — reachable from card, history tab, settings</span
+                >
+              </summary>
+              <div class="kids">
+                <div class="leaf">
+                  GpsPlayDateComponent <span class="note">date picker, last 30 days</span>
+                </div>
+                <div class="leaf">
+                  NativeComponentMap → <strong>ANDROID NATIVE</strong>
+                  <code>CustomMapView</code> (Java)
+                  <span class="tag star">★ performance-critical</span>
+                </div>
+                <details>
+                  <summary>Chips "report" → BottomSheetModal</summary>
+                  <div class="kids">
+                    <details>
+                      <summary>GpsPlayBackReportComponent</summary>
+                      <div class="kids">
+                        <div class="leaf">
+                          4× CardGpsSettings (over-speed, hard-brake, engine-off, distance)
+                        </div>
+                        <div class="leaf">ListCardStoppage → StopLocationMap</div>
+                      </div>
+                    </details>
+                  </div>
+                </details>
+                <div class="leaf">TooltipPlayModal <span class="note">first-run overlay</span></div>
+              </div>
+            </details>
+          </div>
+
+          <div class="subsection subsection--top">
+            <h3 class="h-sub">Node descriptions</h3>
+            <div class="table-wrap">
+              <table class="ref-table">
+                <thead>
+                  <tr>
+                    <th style="width: 190px">Node</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="primary"><code>GpsTrackerLandingPage</code></td>
+                    <td>
+                      Only screen that fetches the owner's whole truck list. Splits it into
+                      <code
+                        >allTruckList / activeTruckList / inactiveTruckList / expiredTruckList /
+                        newTruckList / sharedTruckList</code
+                      >, builds <code>listChipsData</code> counts, publishes
+                      <code>global.globalGpsTruckData</code>, <code>global.globaltruckData</code>,
+                      <code>global.globalMarkers</code>, <code>global.globalImeiIDList</code>. Hosts
+                      Map-tab and List-tab. Re-runs <code>initialFunction()</code> on the
+                      <code>gpsShareNotify</code>, <code>truckShareListUpdate</code>,
+                      <code>updateGlobalList</code> device events.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsDashboardMap</code></td>
+                    <td>
+                      Fleet overview map. Renders one <code>Marker</code> per truck from
+                      <code>global.globalMarkers</code>. Marker press → 3 parallel calls
+                      (<code>truckInfo</code>, <code>getMileageAgainstImeiID</code>,
+                      <code>lastStopTime</code>) whose results are gated by
+                      <code>getFetchFlag()</code> before the bottom-sheet is shown. Does
+                      <strong>not</strong> live-track — it is a snapshot.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsActiveMap</code></td>
+                    <td>
+                      Single-truck live tracking. Owns the animation ⇄ API loop. Everything visible
+                      in the bottom-sheet header is read from the mutable
+                      <code>this.truckObject</code>, which the base class rewrites on every cycle.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsBaseComponent</code></td>
+                    <td>
+                      The shared base class (§4). Contains the live-update logic, recentre logic,
+                      API-completion gating, and the subscription-expired modals.
+                      <strong>Not a UI component</strong> — it renders nothing itself.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>AnimatedMarker</code></td>
+                    <td>
+                      JS re-implementation of the old native animated marker. Interpolates the truck
+                      between two GPS points with <code>requestAnimationFrame</code>, draws the red
+                      breadcrumb <code>Polyline</code>, keeps the truck inside the viewport, and —
+                      critically —
+                      <strong>calls <code>onAnimationComplete</code> when it finishes</strong>.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsTrackerTruckDetailsPage</code></td>
+                    <td>
+                      Two-tab body of the bottom sheet. On mount / on <code>imeiID</code> change it
+                      fetches today's stop list (<code>stopInfo</code>).
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsTrackerTruckDetailsSettingsTab</code></td>
+                    <td>
+                      Pure navigation menu; gates features on <code>packageType == 'basic'</code>.
+                      Emits <code>gpsLockUnlockStatusUpdated</code> when the
+                      <code>engineLocked</code> prop changes.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsTrackerEngineLockOrUnlock</code></td>
+                    <td>
+                      Sends the lock/unlock command. Persists an optimistic "processing" record in
+                      AsyncStorage (<code>listOfengineStatusOfTrucks</code>) so the spinner survives
+                      a screen reopen.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsPlayBackMap</code></td>
+                    <td>
+                      Historical playback. JS only fetches + shapes the data;
+                      <strong>all rendering and animation is done by the Android native view</strong
+                      >.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>GpsPlayBackReportComponent</code></td>
+                    <td>
+                      The report sheet for a playback day. Note: this component itself is plain JS —
+                      the <em>native</em> part is the map it sits on top of
+                      (<code>CustomMapView</code>), which owns the seek-bar, polylines, markers and
+                      the marker animation.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="primary"><code>CustomMapView.java</code></td>
+                    <td>
+                      Android native Google-Maps view (~1080 lines). Receives <code>latList</code>,
+                      <code>lngList</code>, <code>locationObject</code>, <code>speed</code>,
+                      <code>playTimeline</code> as <code>@ReactProp</code>s and is driven by
+                      <code>UIManager.dispatchViewManagerCommand</code> (<code>onReadyView</code> /
+                      <code>onRemoveView</code>).
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        <!-- SEC3 -->
+        <section class="section" id="sec-3">
+          <div class="eyebrow"><span class="num">§3</span>Live tracking</div>
+          <h2 class="h-section">The live-tracking cycle (GpsActiveMap), step by step</h2>
+          <p class="section-intro">This is the loop introduced in §0, laid out call by call.</p>
+
+          <h3 class="h-sub">3.1 Bootstrap</h3>
+          <p>
+            <code>componentDidMount</code> (<code>GpsActiveMap.js:146</code>) has two arrival paths:
+          </p>
+          <ul>
+            <li>
+              <strong>From a truck-list card</strong> → <code>singleTruckObeject</code> has no
+              <code>lastUpdate</code> → <code>truckInfo</code> is called →
+              <code>fetchGpsAddressDone()</code> builds <code>lastUpdate</code> →
+              <code>setData()</code>.
+            </li>
+            <li>
+              <strong>From the dashboard map</strong> → <code>lastUpdate</code> is already present →
+              <code>setData()</code> immediately.
+            </li>
+          </ul>
+
+          <div class="code-block">
+            <div class="code-label">
+              <span>GpsActiveMap.js:146</span><button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>var { lastUpdate, spyVoiceNo, engineOffTime, truckStatus, imei_id, daysMileage, packageType }
+      = this.props.route.params.singleTruckObeject;
+
+if (typeof lastUpdate === 'undefined') truckModel.getTruckAddress({ imeiID: imei_id }); // came from a card
+else { this.spyVoiceNo = spyVoiceNo; this.setData(lastUpdate); }                        // came from dashboard map
+
+if (engineOffTime === undefined &amp;&amp; truckStatus == 'inactive') this.updateEngineOffTime(imei_id);
+else this.fetchTruckEngineOffTimeStatus = true;
+
+if (daysMileage === undefined &amp;&amp; packageType !== 'basic') this.updateMillageData(imei_id);
+else this.fetchTruckMillageStatus = true;</code></pre>
+          </div>
+
+          <p>
+            <code>setData()</code> (<code>GpsActiveMap.js:287</code>) reads the saved map type from
+            AsyncStorage, stores <code>lastUpdate</code> on <code>truckObject</code>, then calls
+            <code>updateLocation(imei_id)</code> which sets <code>this.firstCallCheck = 0</code> and
+            fires the first <code>getGpsLastLocation</code>.
+          </p>
+
+          <h3 class="h-sub">3.2 The loop</h3>
+          <div class="steps">
+            <div class="step">
+              <div class="step-rail">
+                <div class="step-num">1</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">
+                  Gps.getGpsLastLocation([imei]) <span class="file">model/Gps.js:139</span>
+                </div>
+                <div class="step-desc">
+                  POST <code>trucklagbeGPS/…/locationInfoAgainstImeiIDs</code>
+                </div>
+                <div class="step-code">→ ctx.lastLocation = responseJson → ctx.dataFetchDone()</div>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-rail">
+                <div class="step-num">2</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">
+                  BaseComponent.dataFetchDone() <span class="file">GpsBaseComponent:223</span>
+                </div>
+                <div class="step-desc">
+                  POST <code>tl_geolocation/…/customizedLocationAddress</code> via
+                  <code>geofencingModel.getAddressFromLatLng({lat,lng}, true)</code>
+                </div>
+                <div class="step-code">
+                  2nd arg `true` = on failure still continue the chain with no address
+                </div>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-rail">
+                <div class="step-num">3</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">
+                  BaseComponent.getAddressFromLatLng(response)
+                  <span class="file">GpsBaseComponent:205</span>
+                </div>
+                <div class="step-code">
+                  lastUpdate = "&lt;bangla date/time&gt;, &lt;adressNameBangla&gt;" →
+                  updateDataOnInterval(lastLocation, lastUpdate)
+                </div>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-rail">
+                <div class="step-num">4</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">
+                  BaseComponent.updateDataOnInterval()
+                  <span class="file">GpsBaseComponent:133</span>
+                </div>
+                <div class="step-desc">The heart of live tracking.</div>
+                <div class="step-code">
+                  if (this.firstCallCheck == null) return; // kill-switch — loop dies here region =
+                  {lat,lng from response, deltas from this.truckRegion} markerRotation = same as
+                  before if position unchanged, else Utility_Functions.getAngleFromLatLng(prev,
+                  next) ── MUTATES this.truckObject ── truckSpeed, engineStatus, gsmStrength,
+                  gpsTracking, engineLocked, lastUpdate ── FIRST CALL (firstCallCheck &lt; 1) ──
+                  truckRegion = region; setState({region, markerRotation}); isInitializedMapview =
+                  true; firstCallCheck++; setTimeout(10ms): markerRef.setInitialPosition(region)
+                  mapViewRef.animateCamera({center, zoom}, 1) hideLoadingModal() ── EVERY OTHER CALL
+                  ── setState({region, markerRotation}, () => markerRef.animateMarkerAlongPolyline(
+                  region, markerRotation.toString(), this.liveTrackingTimer /* 10000 ms */,
+                  this.snapPointSecond /* paddingBottom, unused */))
+                </div>
+                <span class="step-flag">guarded by firstCallCheck == null</span>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-rail">
+                <div class="step-num">5</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">
+                  AnimatedMarker <span class="file">AnimatedMarker.js</span>
+                </div>
+                <div class="step-code">
+                  setInitialPosition() → fires onAnimationComplete() IMMEDIATELY
+                  animateMarkerAlongPolyline() → requestAnimationFrame loop for 10s:
+                  easeInOutCubic(progress) → interpolatePosition() setState({currentPosition,
+                  rotation, polylineCoordinates: [...prev, p]}) checkAndRecenterMap() (only while
+                  isMapRecentered === true) progress >= 1 → onAnimationEnd() →
+                  props.onAnimationComplete()
+                </div>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-rail"><div class="step-num">6</div></div>
+              <div class="step-body">
+                <div class="step-title">
+                  GpsActiveMap.getNextUpdateAfterTransition()
+                  <span class="file">GpsActiveMap.js:375</span>
+                </div>
+                <div class="step-code">
+                  gpsModel.getGpsLastLocation([imei_id]) ── back to step 1 ──
+                  this.updateMillageData(imei_id) → getMileageAgainstImeiID
+                  this.updateEngineOffTime(imei_id) → lastStopTime (inactive only)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout callout-warn">
+            <div class="ic">⏱</div>
+            <p>
+              <strong>Effective refresh period ≈ 10s (animation) + network round-trip.</strong> Not
+              a timer.
+            </p>
+          </div>
+
+          <h3 class="h-sub">3.3 What can stop the loop</h3>
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 220px">Cause</th>
+                  <th>Mechanism</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary">Truck changed via dropdown</td>
+                  <td>
+                    <code>resetValueOnDropdown()</code> sets
+                    <code>this.firstCallCheck = null</code> →
+                    <code>updateDataOnInterval</code> returns early. Restarted by the fresh
+                    <code>truckInfo → setData → updateLocation</code> chain (which resets
+                    <code>firstCallCheck = 0</code>).
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">Screen unmounted</td>
+                  <td>
+                    <code>componentWillUnmount</code> calls
+                    <code>markerRef.stopAnimatingMarkerAlongPolyline()</code> and nulls
+                    <code>markerRef</code> / <code>mapViewRef</code>.
+                    <code>cancelAnimationFrame</code> means <code>onAnimationComplete</code> never
+                    fires.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">API failure</td>
+                  <td>
+                    <code>checkErrorNetOrApi</code> opens the error / no-internet modal and
+                    <strong>does not re-arm the loop</strong>. The user must tap "try again", which
+                    pops the screen.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">
+                    A new <code>animateMarkerAlongPolyline</code> while one is running
+                  </td>
+                  <td>
+                    <code>stopAnimation()</code> is called first, so the previous cycle's completion
+                    callback never fires — the new animation owns the chain.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="h-sub">3.4 Camera / recentre behaviour</h3>
+          <ul>
+            <li>
+              <code>AnimatedMarker.checkAndRecenterMap</code> compares the interpolated position
+              against <code>getMapBoundaries()</code> and re-centres
+              <strong>only when the truck leaves the visible box</strong> and
+              <code>isMapRecentered === true</code>.
+            </li>
+            <li>
+              Any user gesture (<code>onPanDrag</code>, <code>onPress</code>,
+              <code>onDoublePress</code>, zoom buttons) calls <code>showTrackButton()</code> → sets
+              <code>shouldStopAnimating = true</code> and
+              <code>markerRef.setMapRecenterFlag(false)</code>, so the map stops chasing the truck
+              and the "track" chip appears.
+            </li>
+            <li>
+              Tapping the chip calls <code>recenter()</code> (base class) → reads the marker's real
+              position, animates the camera to it, hides the chip, and sets
+              <code>setMapRecenterFlag(true)</code>.
+            </li>
+          </ul>
+        </section>
+        <!-- SEC4 -->
+        <section class="section section-full" id="sec-4">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§4</span>Architecture</div>
+            <h2 class="h-section"><code>GpsBaseComponent</code> — the base class</h2>
+            <p class="section-intro">
+              File: <code>app/views/GpsBaseComponent/index.js</code>. Extended by
+              <strong>GpsActiveMap, GpsDashboardMap, and all four truck-list screens</strong>. It
+              renders nothing; it's a behaviour mixin implemented as a
+              <code>React.PureComponent</code> subclass.
+            </p>
+            <p class="section-intro">
+              Module-level constants: <code>defaultLocation = [23.78812, 90.397517]</code>,
+              <code>LATITUDE_DELTA = 0.09512</code>, <code>LONGITUDE_DELTA = 0.0018625</code>, and a
+              module-scoped <code>currentTruckDetail</code> used by the expiry modals.
+            </p>
+          </div>
+
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 230px">Member</th>
+                  <th>Purpose</th>
+                  <th style="width: 280px">Gotcha</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary"><code>getFetchFlag()</code></td>
+                  <td>
+                    true only when all three of <code>fetchGpsAddressDoneStatus</code>,
+                    <code>fetchTruckMillageStatus</code>,
+                    <code>fetchTruckEngineOffTimeStatus</code> are true. This is the
+                    <strong>fan-in gate</strong> for the three parallel calls.
+                  </td>
+                  <td>
+                    If a subclass forgets to set one of the three flags (e.g.
+                    <code>basic</code> package skips mileage), the loading modal never closes.
+                    That's why every early-return path explicitly sets the flag to true.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>resetApiStatusVariable(status)</code></td>
+                  <td>Resets all three flags to false when <code>status === true</code>.</td>
+                  <td>Called after the modal/sheet is shown so the next cycle can gate again.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>checkModalAndLoadingStatus()</code></td>
+                  <td>
+                    500ms delayed <code>setState</code> that opens the details modal and closes the
+                    loader when <code>getFetchFlag()</code> is true.
+                  </td>
+                  <td>
+                    Overridden in <code>GpsDashboardMap</code> to also clear
+                    <code>markerPressInProgress</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>fetchTruckMillage()</code></td>
+                  <td>
+                    Callback for <code>getMileageAgainstImeiID</code>. Reads
+                    <code>this.TruckMileageObj</code> (set by the model). Writes
+                    <code>daysMileage</code> + <code>lastMileageCalculationTime</code>.
+                  </td>
+                  <td>
+                    <strong>Branches on <code>this.pageName</code></strong
+                    >: <code>GpsDashboardMap</code> writes to <code>state</code>, everyone else
+                    writes to <code>this.truckObject</code> and calls
+                    <code>hideLoadingModal()</code>. <code>daysMileage</code> is nulled unless
+                    positive; timestamp nulled for <code>basic</code> packages.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>fetchTruckEngineOffTime()</code></td>
+                  <td>
+                    Callback for <code>lastStopTime</code>. Reads
+                    <code>this.TruckEngineOffObj[imeiID].engine_off_time</code>.
+                  </td>
+                  <td>
+                    Same <code>pageName</code> branch. Model stores results
+                    <strong>keyed by imei</strong> (<code>{[imeiID]: response, ...prev}</code>) so a
+                    stale response for another truck can't overwrite the current one.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>recenter()</code></td>
+                  <td>
+                    Re-centres on the marker's <em>current interpolated</em> position (not the last
+                    API point), clears <code>totalDistanceVisited</code>, re-enables auto-recentre.
+                  </td>
+                  <td>Fires a Facebook analytics event unless <code>isGpsDemo</code>.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>getMarkerPositionAndRecenter(event)</code></td>
+                  <td>
+                    <code>animateCamera</code> to <code>event</code> lat/lng (strings, parsed) or to
+                    <code>state.region</code>, after a 100ms delay.
+                  </td>
+                  <td>
+                    Also used as the <code>onGetPosition</code> prop of <code>AnimatedMarker</code>.
+                  </td>
+                </tr>
+                <tr class="row-core">
+                  <td class="primary">
+                    <code class="hl">updateDataOnInterval(lastLocation, lastUpdate)</code>
+                  </td>
+                  <td><strong>The heart of live tracking.</strong> See §3.2.</td>
+                  <td>
+                    Guarded by <code>firstCallCheck == null</code>. Mutates
+                    <code>this.truckObject</code> directly — the UI only refreshes because
+                    <code>setState({region, markerRotation})</code> triggers a re-render in the same
+                    tick.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>checkDistanceAndAnimate(new, prev)</code></td>
+                  <td>
+                    Accumulates haversine distance and animates the camera once
+                    <code>imaginaryCircleRadius</code> (default 250m) is exceeded.
+                  </td>
+                  <td>
+                    <strong>Currently dead on GpsActiveMap</strong> — only
+                    <code>animate()</code> calls it, and <code>animate()</code> is never invoked
+                    (legacy of the old <code>DeviceEventEmitter</code> marker bridge).
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>getAddressFromLatLng(response)</code></td>
+                  <td>
+                    Builds the Bangla "Last update" string and hands off to
+                    <code>updateDataOnInterval</code>.
+                  </td>
+                  <td>
+                    Called by <code>Geofencing.getAddressFromLatLng</code>
+                    <strong>on success and on failure</strong> (because
+                    <code>updateDataOnError = true</code>), so a geocoding outage degrades to "time
+                    only" instead of freezing the loop.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>dataFetchDone()</code></td>
+                  <td>Bridge from <code>locationInfoAgainstImeiIDs</code> → reverse geocode.</td>
+                  <td>
+                    Name collision warning: <code>Geofencing</code> model also calls
+                    <code>ctx.dataFetchDone(responseJson)</code> for the geofence list — different
+                    screens, same method name.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>resetValueOnDropdown()</code></td>
+                  <td>Full teardown before switching trucks.</td>
+                  <td>
+                    Mutates <code>this.state</code> <strong>directly</strong> (<code
+                      >this.state.allLocation = []</code
+                    >, <code>this.state.region = …</code>) and writes to an undeclared global
+                    <code>allLocation</code>. Intentional (avoids a render before the new truck
+                    loads) but fragile.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>setImaginaryCircleRadius()</code></td>
+                  <td>Clamps <code>imaginaryCircleRadius</code> to a 20m floor.</td>
+                  <td>
+                    Ignores its <code>{latitudeDelta, longitudeDelta}</code> argument in the current
+                    implementation.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>showTrackButton()</code></td>
+                  <td>Stops auto-follow and shows the "track" chip.</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td class="primary">
+                    <code>onPressListItem(expireModalVisibility, singleTruckDetail)</code>
+                  </td>
+                  <td>
+                    Used by the four truck-list screens. Stores the truck in module-level
+                    <code>currentTruckDetail</code> and decides which expiry modal to show.
+                  </td>
+                  <td><code>hasShareId</code> decides <em>own</em> vs <em>other</em> modal.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>redirectToPackageRenewPage()</code></td>
+                  <td>
+                    Routes to <code>StandardPackage</code> with <code>renew: true</code> when the
+                    package type is <code>standard</code>.
+                  </td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td class="primary">
+                    <code>renderOwnSubscriptionExpireModal()</code> /
+                    <code>renderOtherSubscriptionExpireModal()</code>
+                  </td>
+                  <td>Mutually exclusive on <code>hasShareId</code>.</td>
+                  <td>Own → "Renew" button; other → "OK, ask the owner".</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>renderMenuBar(truckNo, fontWeight)</code></td>
+                  <td>Shared white-back-icon menu bar.</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>getTruckListForGpsAccessShare()</code></td>
+                  <td>
+                    Filters <code>global.globalGpsTruckData</code> to trucks you own, with
+                    <code>share_count &lt; 10</code>, not expired, not new.
+                  </td>
+                  <td>—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="subsection">
+            <div class="callout callout-danger">
+              <div class="ic">⚠</div>
+              <p>
+                <strong><code>GpsTrackerBaseComponent.js</code></strong> (in
+                <code>app/views/GpsTracker/</code>) is a <em>different, unused</em> file — an empty
+                shell with an unused constructor. Do not confuse it with
+                <code>GpsBaseComponent</code>.
+              </p>
+            </div>
+          </div>
+        </section>
+        <!-- SEC5 -->
+        <section class="section section-full" id="sec-5">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§5</span>Architecture</div>
+            <h2 class="h-section"><code>GpsActiveMap</code> class variables &amp; constructor</h2>
+            <p class="section-intro">
+              Set in <code>constructor</code> / <code>initializeData()</code> —
+              <code>GpsActiveMap.js:189</code>.
+            </p>
+          </div>
+
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 180px">Variable</th>
+                  <th style="width: 160px">Init</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary"><code>pageName</code></td>
+                  <td><code>'GpsActiveMap'</code></td>
+                  <td>
+                    Read by the base class to decide <code>state</code> vs
+                    <code>truckObject</code> writes.
+                  </td>
+                </tr>
+                <tr class="row-core">
+                  <td class="primary"><code class="hl">truckObject</code></td>
+                  <td>route param <code>singleTruckObeject</code></td>
+                  <td>
+                    <strong>Mutable UI source of truth.</strong> Everything in the sheet header
+                    reads from it.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>mapViewRef</code> / <code>mapIsReady</code></td>
+                  <td><code>null</code> / <code>false</code></td>
+                  <td>
+                    Native map guard — every <code>getCamera</code>/<code>animateCamera</code> is
+                    wrapped in <code>if (this.mapViewRef &amp;&amp; this.mapIsReady)</code> to
+                    prevent native crashes.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>markerRef</code></td>
+                  <td>set via <code>ref</code> callback</td>
+                  <td>The <code>AnimatedMarker</code> instance.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>truckRegion</code></td>
+                  <td>default Dhaka coords</td>
+                  <td>Previous coordinate; used for bearing and for delta values.</td>
+                </tr>
+                <tr class="row-core">
+                  <td class="primary"><code class="hl">firstCallCheck</code></td>
+                  <td><code>0</code></td>
+                  <td>
+                    <code>0</code> = first cycle, <code>≥1</code> = steady state,
+                    <code>null</code> = <strong>loop disabled</strong>.
+                  </td>
+                </tr>
+                <tr class="row-core">
+                  <td class="primary"><code class="hl">liveTrackingTimer</code></td>
+                  <td><code>10 * 1000</code></td>
+                  <td>
+                    Marker animation duration <strong>and</strong> the de-facto refresh period.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>snapPointSecond</code></td>
+                  <td><code>round(H*0.3578) - H*0.04 + 10</code></td>
+                  <td>
+                    Bottom-sheet mid snap point; also passed (unused) as <code>paddingBottom</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>zoomLevel</code></td>
+                  <td><code>13</code></td>
+                  <td>Kept in sync via <code>setZoomLevel()</code> on pan/zoom; clamped 7–19.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>imaginaryCircleRadius</code></td>
+                  <td><code>250</code></td>
+                  <td>Camera-follow threshold in metres (legacy path).</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>totalDistanceVisited</code></td>
+                  <td><code>0</code></td>
+                  <td>Accumulator for the same legacy path.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>shouldStopAnimating</code></td>
+                  <td><code>false</code></td>
+                  <td>Set <code>true</code> by <code>showTrackButton()</code>.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>trackButtonIsVisibleWhileDragging</code></td>
+                  <td><code>false</code></td>
+                  <td>Re-shows the chip after a bottom-sheet drag.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>isInitializedMapview</code></td>
+                  <td><code>false</code></td>
+                  <td>Part of the <code>hideLoadingModal()</code> condition.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>isGpsDemo</code></td>
+                  <td><code>false</code></td>
+                  <td>
+                    <code>true</code> in the parallel <code>GpsDemo/</code> tree; suppresses
+                    analytics and hard-codes the date string.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">
+                    <code>fetchGpsAddressDoneStatus</code> / <code>fetchTruckMillageStatus</code> /
+                    <code>fetchTruckEngineOffTimeStatus</code>
+                  </td>
+                  <td><code>false</code></td>
+                  <td>The three-way fan-in gate (§4).</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>geofencingModel</code></td>
+                  <td><code>new Geofencing(this, 'GpsActiveMap')</code></td>
+                  <td>Used <strong>only</strong> for reverse geocoding in the live loop.</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>spyVoiceNo</code></td>
+                  <td><code>''</code></td>
+                  <td>Phone number for the "spy voice" call feature.</td>
+                </tr>
+                <tr>
+                  <td class="primary">
+                    Module-level <code>allLocation</code>, <code>callFromDropDown</code>,
+                    <code>isSnapToBottom</code>, <code>truckModel</code>, <code>gpsModel</code>
+                  </td>
+                  <td>—</td>
+                  <td>
+                    Shared module state; <code>callFromDropDown</code> tells
+                    <code>fetchGpsAddressDone</code> to rebuild the whole <code>truckObject</code>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="subsection subsection--top">
+            <h3 class="h-sub">Modals on this screen</h3>
+          </div>
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 250px">Modal</th>
+                  <th style="width: 250px">State flag</th>
+                  <th>Trigger</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary"><code>ModalLoadingScreen</code></td>
+                  <td><code>loadingModalVisibility</code></td>
+                  <td>Initial load, truck switch, share-link generation</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>ModalBottomSheetTimeLimit</code></td>
+                  <td><code>modalBottomSheetTimeLimitVisibility</code></td>
+                  <td>
+                    "Share Location" → pick expiry from <code>global.globalSpeedLimitArray</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>ModalBottomSheetShareLink</code></td>
+                  <td><code>modalBottomSheetShareLinkVisibility</code></td>
+                  <td>After <code>getMapToken</code> returns the short URL</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>ModalBottomSheetSpyVoice</code> ×2</td>
+                  <td><code>modalSpyAvailable</code> / <code>modalSpyNotAvailable</code></td>
+                  <td>Spy-voice call vs. package-upgrade prompt</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>ModalBottomSheetChangeMapType</code></td>
+                  <td><code>modalChangeMapTypeVisibility</code></td>
+                  <td>
+                    Map-type switch (persisted to AsyncStorage <code>lastSelectedMapType</code>;
+                    <code>satellite</code> is mapped to <code>hybrid</code>)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>ModalShowApiErrorWithTruckLogo</code></td>
+                  <td><code>modalApiHitErrorVisibility</code></td>
+                  <td>Any model <code>catch</code> where the network <em>is</em> reachable</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>ModalNoInternetConnection</code></td>
+                  <td><code>modalNoInternetVisibility</code></td>
+                  <td>Any model <code>catch</code> where the network is <em>not</em> reachable</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <!-- SEC6 -->
+        <section class="section" id="sec-6">
+          <div class="eyebrow"><span class="num">§6</span>Playback</div>
+          <h2 class="h-section">Playback — and the native Java layer</h2>
+
+          <h3 class="h-sub">6.1 JS side — GpsPlayBackMap.js</h3>
+          <p>
+            JS <strong>never draws the playback map</strong>. It only fetches and shapes data, then
+            tells the native view to render.
+          </p>
+
+          <div class="code-block">
+            <div class="code-label">
+              <span>GpsPlayBackMap.js — flow</span><button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>componentDidMount → manageTooltipPlaybackAndApiCall()
+   first ever visit → show TooltipPlayModal, call onNativeMapviewReady() with empty data
+   otherwise        → getGPSStopLocationList(new Date())
+
+getGPSStopLocationList(date)                          POST stopInfo
+  → setGPSStopLocationList(responseJson)
+      engineOffTime / hardBreakAccelerationCount / overSpeedCount /
+      daysMileage / lastMileageCalculationTime   (instance fields, not state)
+      ├─ gpsModel.getGpsPlaybackLocationData(date)    POST getPlayBackLoationData
+      │     → createDummyGPSDataAgainstTime(...)  (fills gaps, tags engine_off spans)
+      │     → setState({allDayLocation}) → responseOfGpsPlaybackLocationData()
+      │     → doneFetchingPlaybackData = true
+      └─ gpsModel.getGpsDataBetweenDate({start,end})   POST mileageDataAgainstTime
+            (skipped for `basic` packages → setGpsDataBetweenDate([], true))
+            → doneFetchingDurationData = true
+
+both flags true → onNativeMapviewReadyAfterApiCall() → onNativeMapviewReady()
+   UIManager.dispatchViewManagerCommand(viewId, Commands.onReadyView, [viewId])</code></pre>
+          </div>
+
+          <p>
+            The two-flag gate (<code
+              >doneFetchingPlaybackData &amp;&amp; doneFetchingDurationData</code
+            >) is the playback equivalent of <code>getFetchFlag()</code> from §4.
+          </p>
+          <p>
+            Native → JS: <code>CustomMapView</code> emits
+            <code>onCustomMapViewLoadedComplete</code> over <code>RCTDeviceEventEmitter</code>; JS
+            listens and hides the loader after 500ms.
+          </p>
+
+          <h3 class="h-sub">6.2 Native side — CustomMapView.java</h3>
+          <p><code>CustomMapViewModule</code> (a <code>SimpleViewManager</code>) exposes:</p>
+          <ul>
+            <li>
+              <strong>Props</strong> — <code>latList</code>, <code>lngList</code>,
+              <code>locationObject</code>, <code>speed</code>, <code>screenWidth</code>,
+              <code>screenHeight</code>, <code>gpsDeviceName</code>, <code>playTimeline</code>.
+            </li>
+            <li>
+              <strong>Commands</strong> — <code>onTestCallback</code> (1),
+              <code>onReadyView</code> (2), <code>onRemoveView</code> (3).
+            </li>
+          </ul>
+
+          <p>
+            <code>onReadyView()</code> clears polylines, resets the timeline range, removes the
+            marker, clears padding and calls <code>mapView.getMapAsync(this)</code>.
+            <code>onMapReady</code> → <code>onReady()</code> which, in one pass over
+            <code>locationObject</code>:
+          </p>
+          <ol>
+            <li>
+              computes a bearing per point (<code>getAngleFromLatLng</code>, reusing the previous
+              angle when the point did not move) into <code>rotationList</code>;
+            </li>
+            <li>builds <code>polyz</code> (the <code>LatLng</code> route);</li>
+            <li>
+              builds <code>progressSpan</code> — contiguous engine-on / engine-off runs used to
+              colour the seek bar (green <code>color_green</code> / red <code>color_error</code>);
+            </li>
+            <li>
+              records the seek-bar indices matching <code>playTimeline.start</code> /
+              <code>.end</code> (<code>setProgressToPlayTimeline</code>);
+            </li>
+            <li>
+              bucket-sorts points into <code>locationListStop</code>,
+              <code>locationListOverSpeed</code>, <code>locationListDeviceRemoved</code> and adds
+              their markers <strong>after</strong> the main loop (markers are batched for
+              performance);
+            </li>
+            <li>
+              <code>drawPolylineAndMarkerDefault()</code> — grey full-route polyline, start/end
+              markers, the truck marker, <code>animateCameraToLatLngBounds(min, max)</code>;
+            </li>
+            <li><code>initDataToSeekbar()</code>.</li>
+          </ol>
+
+          <p>Playback animation, <code>animatePolylineAndMarker(progress)</code>:</p>
+          <div class="code-block">
+            <div class="code-label">
+              <span>CustomMapView.java</span><button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>playbackHandler = new Handler(Looper.getMainLooper());
+playbackRunnable = () -> {
+    if (currentProgress[0] &lt; polyz.size()) {
+        seekbar.setProgress(currentProgress[0], true);
+        marker.setRotation(rotationList.get(currentProgress[0]));
+        animateToCoodinate(polyz.get(currentProgress[0]), (int)(0.4 * playbackSpeed)); // ObjectAnimator
+        polyLinePoints.add(target); polylineAnimated.setPoints(polyLinePoints);        // red visited trail
+        currentProgress[0]++;
+        playbackHandler.postDelayed(this, playbackSpeed);   // ← self-rescheduling, same pattern as JS
+        if (endProgressForTimeline == progressValue) setPlaybackToReplay(this);
+    } else setPlaybackToReplay(this);
+};</code></pre>
+          </div>
+
+          <div class="callout callout-info">
+            <div class="ic">🔁</div>
+            <p>
+              Note the symmetry with the live map:
+              <strong><code>Handler.postDelayed</code> re-posting itself</strong>, not a fixed
+              timer. <code>playbackSpeed</code> comes from the <code>speed</code> prop (<code
+                >speedTime = 1000ms</code
+              >, changeable via the 1×/2×/4× buttons). Position interpolation uses an
+              <code>ObjectAnimator</code> with a custom <code>TypeEvaluator</code> over
+              <code>LatLng</code> — this is why playback stays smooth for thousands of points where
+              a JS implementation would drop frames.
+            </p>
+          </div>
+
+          <p>
+            Marker taps (<code>onMarkerClick</code>) cycle through stacked stop / over-speed /
+            device-removed markers at the same coordinate via <code>markerInfoStop</code> /
+            <code>markerInfoOverSpeed</code> / <code>markerInfoDeviceRemoved</code> hash maps.
+          </p>
+        </section>
+        <!-- SEC7 -->
+        <section class="section section-full" id="sec-7">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§7</span>API system</div>
+            <h2 class="h-section">The model-based API system</h2>
+            <p class="section-intro">
+              Every screen instantiates a model with <code>(context, pageName)</code>:
+            </p>
+          </div>
+
+          <div class="code-block constrain">
+            <div class="code-label">
+              <span>e.g. GpsActiveMap constructor</span><button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>truckModel      = new Truck(this, 'GpsActiveMap');
+gpsModel        = new Gps(this, 'GpsActiveMap');
+this.geofencingModel = new Geofencing(this, 'GpsActiveMap');
+stopLocation    = new StopLocation(this, 'GpsTrackerTruckDetailsPage');</code></pre>
+          </div>
+
+          <div class="constrain">
+            <p>The model then:</p>
+            <ol>
+              <li>calls <code>Functions.&lt;transport&gt;(endpoint, payload)</code>,</li>
+              <li>
+                on success <strong>writes the raw response onto the context</strong> (e.g.
+                <code>this.ctx.GpsAddress = responseJson</code>) and calls a
+                <strong>well-known callback on the context</strong> (e.g.
+                <code>this.ctx.fetchGpsAddressDone()</code>),
+              </li>
+              <li>
+                on failure calls <code>this.checkErrorNetOrApi(error)</code> which does a
+                <code>NetInfo.fetch()</code> and opens either
+                <code>modalApiHitErrorVisibility</code> or <code>modalNoInternetVisibility</code>,
+              </li>
+              <li>
+                fires
+                <code
+                  >AnalyticFunctions.Analytics('Truck er Obosthan', &lt;group&gt;,
+                  'try'|'success'|'fail', params)</code
+                >
+                on every branch.
+              </li>
+            </ol>
+
+            <div class="callout callout-danger">
+              <div class="ic">⚠</div>
+              <p>
+                <strong>Consequence:</strong> a screen must implement the exact callback name the
+                model expects, or the response is silently dropped.
+              </p>
+            </div>
+          </div>
+
+          <h3 class="h-sub constrain">Callback contract</h3>
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 280px">Model method</th>
+                  <th style="width: 220px">Writes to ctx</th>
+                  <th>Calls on ctx</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary"><code>Truck.getTruckListWithLocation</code></td>
+                  <td>—</td>
+                  <td><code>doneFetchingData(responseJson)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Truck.getTruckAddress</code></td>
+                  <td><code>ctx.GpsAddress</code></td>
+                  <td><code>fetchGpsAddressDone(tabStatus)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Truck.getTruckMileage</code></td>
+                  <td><code>ctx.TruckMileageObj</code></td>
+                  <td><code>fetchTruckMillage()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Truck.getTruckEngineOffTime</code></td>
+                  <td><code>ctx.TruckEngineOffObj[imeiID]</code></td>
+                  <td><code>fetchTruckEngineOffTime()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Truck.getSharedPersonListForSharedTruck</code></td>
+                  <td><code>ctx.listForSharedTruckObj</code></td>
+                  <td><code>doneFetchingDataOwnerSharedTruck()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Truck.getDeactivatedSharedResponse</code></td>
+                  <td><code>ctx.deactivateSharedTruckResponseObj</code></td>
+                  <td><code>doneDeactivateSharedTruck()</code></td>
+                </tr>
+                <tr class="row-core">
+                  <td class="primary"><code class="hl">Gps.getGpsLastLocation</code></td>
+                  <td><code>ctx.lastLocation</code></td>
+                  <td><code>dataFetchDone()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Gps.getGpsPlaybackLocationData</code></td>
+                  <td><code>ctx.allDayLocation</code>, <code>global.globalAllGpsData</code></td>
+                  <td><code>responseOfGpsPlaybackLocationData()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Gps.getGpsDataBetweenDate</code></td>
+                  <td>—</td>
+                  <td><code>setGpsDataBetweenDate(data)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Gps.getMapToken</code></td>
+                  <td>—</td>
+                  <td><code>dataFetchDoneForMapToken(text)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Gps.getGpsDeviceList</code></td>
+                  <td><code>ctx.GpsDeviceListObj</code></td>
+                  <td><code>fetchDeviceList()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Gps.getSubscriptionListByTruckId</code></td>
+                  <td><code>ctx.SubscriptionListObj</code></td>
+                  <td><code>fetchSubscriptionList()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Gps.shareTruckGpsToAccounts</code></td>
+                  <td>—</td>
+                  <td><code>responseOfGpsAccessShare()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Gps.getAllGpsPackageList</code></td>
+                  <td>—</td>
+                  <td><code>responseOfAllGpsPackageList()</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>StopLocation.getGPSStopLocationList</code></td>
+                  <td>—</td>
+                  <td><code>setGPSStopLocationList(responseJson)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>StopLocation.getStopLocationInfoById</code></td>
+                  <td>—</td>
+                  <td><code>dataFetchDoneAlready(responseJson)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Geofencing.getAddressFromLatLng</code></td>
+                  <td>—</td>
+                  <td><code>getAddressFromLatLng(responseJson)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Geofencing.getGeofenceList</code></td>
+                  <td>—</td>
+                  <td><code>dataFetchDone(responseJson)</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>Notifications.getGpsInAppNotifications</code></td>
+                  <td>—</td>
+                  <td><code>doneFetchingNotficationData(json, since)</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="h-sub constrain">Transports — app/services/functions.js</h3>
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 260px">Helper</th>
+                  <th style="width: 180px">Base URL variable</th>
+                  <th>Path</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary">
+                    <code>gpsTrackerPostFunction</code> / <code>gpsTrackerGetFunction</code>
+                  </td>
+                  <td><code>gpsTrackerUrl</code></td>
+                  <td><code>…/trucklagbeGPS/{v}/</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>geoLocationPostFunction</code></td>
+                  <td><code>geoLocationUrl</code></td>
+                  <td><code>…/tl_geolocation/{v}/</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>gpsSubscriptionGetFunction</code></td>
+                  <td><code>gpsSubscriptionUrl</code></td>
+                  <td><code>…/gps_subscription/{v}/</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>tlTrackerPostFunction</code></td>
+                  <td><code>tlTrackerUrl</code></td>
+                  <td><code>…/{v}/</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>tlGetSsl</code></td>
+                  <td><code>sslCommerceUrl</code></td>
+                  <td>payment init</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <!-- SEC8 -->
+        <section class="section section-full" id="sec-8">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§8</span>API system</div>
+            <h2 class="h-section">★ Master table — View → Endpoint → Response → UI variables</h2>
+            <p class="section-intro">
+              <code>POST</code> unless a <span class="badge-get">GET</span> badge is shown. The two
+              rows behind the live loop (§0/§3) are highlighted.
+            </p>
+            <div class="svc-legend">
+              <span><span class="svc svc-T">T</span>trucklagbeGPS</span>
+              <span><span class="svc svc-G">G</span>tl_geolocation</span>
+              <span><span class="svc svc-S">S</span>gps_subscription</span>
+              <span><span class="svc svc-L">L</span>tlTracker</span>
+              <span><span class="svc svc-SSL">$</span>sslCommerce</span>
+            </div>
+            <div class="filter-row">
+              <input
+                type="text"
+                id="table-filter"
+                placeholder="Filter by screen, endpoint, or variable…"
+              />
+              <span class="filter-count" id="filter-count">35 / 35 rows</span>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="ref-table" id="master-table">
+              <thead>
+                <tr>
+                  <th style="width: 34px">#</th>
+                  <th style="width: 150px">View</th>
+                  <th style="width: 190px">Endpoint</th>
+                  <th style="width: 150px">Trigger</th>
+                  <th style="min-width: 260px">Response (key fields)</th>
+                  <th style="min-width: 260px">Variables updated in UI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td class="primary">GpsTrackerLandingPage</td>
+                  <td>
+                    <span class="svc svc-T">T</span>truckInfoByOwnerID<span class="badge-get"
+                      >GET</span
+                    >
+                  </td>
+                  <td>componentDidMount / share events</td>
+                  <td class="mono">
+                    { responseCode, truckData:[{truck_id, truck_no, model, truck_categrory, imei_id,
+                    shape, share_count, shared_id, locationData:{imei_id, latitude, longitude,
+                    speed, engine_status, engine_locked, updated_on}, packageData:{package_id,
+                    package_type, purchase_status, remaining_days}}] }
+                  </td>
+                  <td class="mono">
+                    state.allTruckList, activeTruckList, inactiveTruckList, expiredTruckList,
+                    newTruckList, sharedTruckList, listChipsData (counts),
+                    firstTimeSubscriptionBuyer, ownerHasNoAddedTruck, ownerHasNoAddedGpsDevice,
+                    dataLoading, loadingModalVisibility; globals globaltruckData,
+                    globalGpsTruckData, globalMarkers, globalImeiIDList, globalTruckNumberList,
+                    globalAllTrucksWithImeiId
+                  </td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td class="primary">GpsDashboardMap</td>
+                  <td><span class="svc svc-T">T</span>truckInfo</td>
+                  <td>marker press</td>
+                  <td class="mono">
+                    { truckData:[{truck_id, truck_no, model, truck_categrory, gps_phone_number}],
+                    GPSData:[{imei_id, speed, engine_status, engine_locked, gsm_strength,
+                    gps_tracking, updated_on, engine_off_time}], packageData:[{package_id,
+                    package_type, purchase_status, remaining_days}],
+                    addressData:[{adressNameBangla}] }
+                  </td>
+                  <td class="mono">
+                    state.badgeText, truckId, truckModel, truckType, truckNumber, truckSpeed,
+                    imei_id, ignition, lastUpdate, packageType, engineLocked, truckStatus,
+                    engineStatus, updatedOn, gsmStrength, gpsTracking; this.spyVoiceNo; then
+                    checkModalAndLoadingStatus() → modalVisibility
+                  </td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td class="primary">GpsDashboardMap</td>
+                  <td><span class="svc svc-T">T</span>getMileageAgainstImeiID</td>
+                  <td>marker press (non-basic)</td>
+                  <td class="mono">{ daysMileage:Number, lastMileageCalculationTime:String }</td>
+                  <td class="mono">
+                    state.daysMileage, state.lastMileageCalculationTime, modalVisibility,
+                    loadingModalVisibility (via base fetchTruckMillage)
+                  </td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td class="primary">GpsDashboardMap</td>
+                  <td><span class="svc svc-T">T</span>lastStopTime</td>
+                  <td>marker press (status inactive)</td>
+                  <td class="mono">{ engine_off_time:String }</td>
+                  <td class="mono">
+                    state.engineOffTime, modalVisibility, loadingModalVisibility (via base
+                    fetchTruckEngineOffTime)
+                  </td>
+                </tr>
+                <tr class="row-core">
+                  <td>5</td>
+                  <td class="primary">GpsActiveMap</td>
+                  <td>
+                    <span class="svc svc-T">T</span
+                    ><code class="hl">locationInfoAgainstImeiIDs</code>
+                  </td>
+                  <td>first load <strong>and after every marker animation</strong></td>
+                  <td class="mono">
+                    [{ imei_id, latitude, longitude, speed, engine_status, gsm_strength,
+                    gps_tracking, engine_locked, updated_on }]
+                  </td>
+                  <td class="mono">
+                    this.lastLocation; then via updateDataOnInterval:
+                    <strong
+                      >truckObject.truckSpeed, truckObject.engineStatus, truckObject.gsmStrength,
+                      truckObject.gpsTracking, truckObject.engineLocked,
+                      truckObject.lastUpdate</strong
+                    >, state.region, state.markerRotation
+                  </td>
+                </tr>
+                <tr class="row-core">
+                  <td>6</td>
+                  <td class="primary">GpsActiveMap</td>
+                  <td>
+                    <span class="svc svc-G">G</span
+                    ><code class="hl">customizedLocationAddress</code>
+                  </td>
+                  <td>after every #5</td>
+                  <td class="mono">{ adressNameBangla }</td>
+                  <td class="mono">
+                    truckObject.lastUpdate ("Last update: &lt;time&gt;, &lt;address&gt;") — then
+                    hands off to #5's UI write
+                  </td>
+                </tr>
+                <tr>
+                  <td>7</td>
+                  <td class="primary">GpsActiveMap</td>
+                  <td><span class="svc svc-T">T</span>truckInfo</td>
+                  <td>mount (from card) / dropdown truck switch</td>
+                  <td class="mono">same as #2</td>
+                  <td class="mono">
+                    truckObject.{imei_id, truckId, truckNumber, truckType, truckModel, truckSpeed,
+                    packageType, engineLocked, truckStatus, engineStatus, updatedOn, gsmStrength,
+                    gpsTracking} (only when callFromDropDown), this.spyVoiceNo, lastUpdate
+                  </td>
+                </tr>
+                <tr>
+                  <td>8</td>
+                  <td class="primary">GpsActiveMap</td>
+                  <td><span class="svc svc-T">T</span>getMileageAgainstImeiID</td>
+                  <td>after every animation (non-basic)</td>
+                  <td class="mono">{ daysMileage, lastMileageCalculationTime }</td>
+                  <td class="mono">
+                    truckObject.daysMileage, truckObject.lastMileageCalculationTime →
+                    TotalDistanceShow
+                  </td>
+                </tr>
+                <tr>
+                  <td>9</td>
+                  <td class="primary">GpsActiveMap</td>
+                  <td><span class="svc svc-T">T</span>lastStopTime</td>
+                  <td>after every animation (inactive only)</td>
+                  <td class="mono">{ engine_off_time }</td>
+                  <td class="mono">truckObject.engineOffTime → renderLastEngineOffTime()</td>
+                </tr>
+                <tr>
+                  <td>10</td>
+                  <td class="primary">GpsActiveMap</td>
+                  <td><span class="svc svc-T">T</span>getMapToken</td>
+                  <td>"Share Location" → pick duration</td>
+                  <td class="mono">plain text token</td>
+                  <td class="mono">
+                    this.shareLocationUrlToCopy, this.shareLocationTimeLimit,
+                    state.modalBottomSheetShareLinkVisibility, loadingModalVisibility
+                  </td>
+                </tr>
+                <tr>
+                  <td>11</td>
+                  <td class="primary">GpsTrackerTruckDetailsPage</td>
+                  <td><span class="svc svc-T">T</span>stopInfo</td>
+                  <td>mount + imeiID change</td>
+                  <td class="mono">
+                    { stopInfo:[{_id, stoppedAt, stoppedEnd, latitude, longitude}], totalStopTime,
+                    hardBreakAccelerationCount, overSpeedCount, daysMileage,
+                    mileageLastCalculationTime }
+                  </td>
+                  <td class="mono">
+                    state.reportList (through getGPSStopListAlongWithDurationData),
+                    state.modalLoadingVisibility
+                  </td>
+                </tr>
+                <tr>
+                  <td>12</td>
+                  <td class="primary">GpsPlayBackMap</td>
+                  <td><span class="svc svc-T">T</span>stopInfo</td>
+                  <td>mount / date change</td>
+                  <td class="mono">as #11</td>
+                  <td class="mono">
+                    this.engineOffTime, this.stopList, this.hardBreakAccelerationCount,
+                    this.overSpeedCount, this.daysMileage, this.lastMileageCalculationTime → later
+                    state.reportData
+                  </td>
+                </tr>
+                <tr>
+                  <td>13</td>
+                  <td class="primary">GpsPlayBackMap</td>
+                  <td><span class="svc svc-T">T</span>getPlayBackLoationData</td>
+                  <td>after #12</td>
+                  <td class="mono">
+                    [{ latitude, longitude, speed, engine_status, alarm_type, created_on /
+                    gps_date_time, formatted_time }]
+                  </td>
+                  <td class="mono">
+                    state.allDayLocation, state.latList, state.lngList → native props locationObject
+                    / latList / lngList; global.globalAllGpsData
+                  </td>
+                </tr>
+                <tr>
+                  <td>14</td>
+                  <td class="primary">GpsPlayBackMap</td>
+                  <td><span class="svc svc-T">T</span>mileageDataAgainstTime</td>
+                  <td>after #12 (non-basic, ≥1 stop)</td>
+                  <td class="mono">{ data:[{ … per-segment mileage … }] }</td>
+                  <td class="mono">
+                    state.reportList (mileage merged into the stop timeline), state.reportData
+                  </td>
+                </tr>
+                <tr>
+                  <td>15</td>
+                  <td class="primary">StopLocationMap / stop detail</td>
+                  <td><span class="svc svc-T">T</span>stopAddressInfo</td>
+                  <td>tap a stop row</td>
+                  <td class="mono">{ address, latitude, longitude, … }</td>
+                  <td class="mono">
+                    state.stopObject, spinLoaderVisibility, locationNotFoundError
+                  </td>
+                </tr>
+                <tr>
+                  <td>16</td>
+                  <td class="primary">GpsTrackerEngineLockOrUnlock</td>
+                  <td>
+                    <span class="svc svc-T">T</span><code class="hl">updateEngineStatus</code>
+                  </td>
+                  <td>lock / unlock confirm</td>
+                  <td class="mono">{ responseCode: 1000 }</td>
+                  <td class="mono">
+                    state.engineLocked, state.processingStage, state.requestedEngineLocked,
+                    loadingModalVisibility; AsyncStorage listOfengineStatusOfTrucks; emits
+                    gpsLockUnlockStatusUpdated
+                  </td>
+                </tr>
+                <tr>
+                  <td>17</td>
+                  <td class="primary">GpsAlertSettings</td>
+                  <td><span class="svc svc-T">T</span>getAlertStatus</td>
+                  <td>mount</td>
+                  <td class="mono">
+                    [{ geo_fencing, over_speed, acceleration, low_battery, device_removed, engine,
+                    speed_limit, contact_num }] (1/0 flags)
+                  </td>
+                  <td class="mono">
+                    state.alertData[0..5].isOn, state.speedLimitValue, state.loadingTruckVisibility
+                  </td>
+                </tr>
+                <tr>
+                  <td>18</td>
+                  <td class="primary">GpsAlertSettings</td>
+                  <td><span class="svc svc-T">T</span>turnOnOffAlert</td>
+                  <td>toggle a switch</td>
+                  <td class="mono">ack</td>
+                  <td class="mono">optimistic — the toggle state is already local</td>
+                </tr>
+                <tr>
+                  <td>19</td>
+                  <td class="primary">GpsAlertSettings</td>
+                  <td><span class="svc svc-T">T</span>setSpeed</td>
+                  <td>save speed limit</td>
+                  <td class="mono">ack</td>
+                  <td class="mono">state.speedLimitValue</td>
+                </tr>
+                <tr>
+                  <td>20</td>
+                  <td class="primary">GeoFencing (index)</td>
+                  <td><span class="svc svc-T">T</span>getGeofencing</td>
+                  <td>mount</td>
+                  <td class="mono">{ geofences:[{ id, name, lat, lng, radius }], max_geofence }</td>
+                  <td class="mono">
+                    this.geoFenceList (instance field, read directly in render),
+                    global.globalMaxGeofence, state.modalLoadingVisibility
+                  </td>
+                </tr>
+                <tr>
+                  <td>21</td>
+                  <td class="primary">GeoFenceAdd</td>
+                  <td><span class="svc svc-T">T</span>insertGeofencing</td>
+                  <td>save</td>
+                  <td class="mono">ack</td>
+                  <td class="mono">list refresh + Actions.pop()</td>
+                </tr>
+                <tr>
+                  <td>22</td>
+                  <td class="primary">GeoFenceEdit</td>
+                  <td><span class="svc svc-T">T</span>updateGeofencing</td>
+                  <td>save</td>
+                  <td class="mono">ack</td>
+                  <td class="mono">list refresh</td>
+                </tr>
+                <tr>
+                  <td>23</td>
+                  <td class="primary">GeoFencing (index)</td>
+                  <td><span class="svc svc-T">T</span>deleteGeofencing</td>
+                  <td>remove</td>
+                  <td class="mono">ack</td>
+                  <td class="mono">
+                    re-runs getGeofenceList → this.geoFenceList; state.modalRemoveGeofenceVisibility
+                  </td>
+                </tr>
+                <tr>
+                  <td>24</td>
+                  <td class="primary">GeoFenceSelectAddress</td>
+                  <td><span class="svc svc-G">G</span>findLocationBySearchKeyFromBarikoi</td>
+                  <td>search typing (debounced ~timeoutSearch)</td>
+                  <td class="mono">
+                    { predictions:[{ description, place_id, latitude, longitude }] }
+                  </td>
+                  <td class="mono">state.searchResult, state.searching</td>
+                </tr>
+                <tr>
+                  <td>25</td>
+                  <td class="primary">GeoFenceSelectAddress</td>
+                  <td><span class="svc svc-G">G</span>findLatLngByPlaceID</td>
+                  <td>pick a search result</td>
+                  <td class="mono">{ lat, long }</td>
+                  <td class="mono">state.region, selected location marker</td>
+                </tr>
+                <tr>
+                  <td>26</td>
+                  <td class="primary">GpsTrackerNotifications</td>
+                  <td><span class="svc svc-T">T</span>getInAppNotifications</td>
+                  <td>mount + pull-to-refresh</td>
+                  <td class="mono">
+                    [{ createdOn, message, intent_id, alert_type, status, deviceStatus }]
+                  </td>
+                  <td class="mono">
+                    state.notificationArray, state.unreadNotificationCount, state.hasNotification,
+                    state.loadingModalVisibility, state.isRefreshing; AsyncStorage gpsNotification +
+                    lastNotificationTimeForGps
+                  </td>
+                </tr>
+                <tr>
+                  <td>27</td>
+                  <td class="primary">GpsTrackerShareSelectPage</td>
+                  <td><span class="svc svc-T">T</span>shareTrucks</td>
+                  <td>confirm share</td>
+                  <td class="mono">{ tl_status: 1000 }</td>
+                  <td class="mono">
+                    success modal; emits truckShareListUpdate → landing page reload
+                  </td>
+                </tr>
+                <tr>
+                  <td>28</td>
+                  <td class="primary">GpsTrackerSharedTruckProfile</td>
+                  <td><span class="svc svc-T">T</span>ownerListForSharedTruck</td>
+                  <td>mount</td>
+                  <td class="mono">
+                    { tl_status, ownerList:[{ shared_id, user_photo, expiration, expiration_text }]
+                    }
+                  </td>
+                  <td class="mono">state.sharedPersonList</td>
+                </tr>
+                <tr>
+                  <td>29</td>
+                  <td class="primary">GpsTrackerSharedTruckProfile (Other)</td>
+                  <td><span class="svc svc-T">T</span>deactivateShare</td>
+                  <td>remove access</td>
+                  <td class="mono">{ tl_status: 1000 }</td>
+                  <td class="mono">list refresh; emits updateGlobalList</td>
+                </tr>
+                <tr>
+                  <td>30</td>
+                  <td class="primary">GpsDigitalInvoiceListDevice</td>
+                  <td><span class="svc svc-L">L</span>getGPSDevicePurchaseHistory</td>
+                  <td>tab mount</td>
+                  <td class="mono">
+                    [{ invoice_id, imei_id, purchase_date, dispatch_date, purchase_amount }]
+                  </td>
+                  <td class="mono">state.deviceList → invoice PDF fields</td>
+                </tr>
+                <tr>
+                  <td>31</td>
+                  <td class="primary">GpsDigitalInvoiceListSubscription</td>
+                  <td>
+                    <span class="svc svc-S">S</span>package/admin/subscriptions/trucks/list<span
+                      class="badge-get"
+                      >GET</span
+                    >
+                  </td>
+                  <td>tab mount</td>
+                  <td class="mono">
+                    [{ invoice_id, amount, purchase_date, expiration_date, total_month_count }]
+                  </td>
+                  <td class="mono">state.subscriptionList → invoice PDF fields</td>
+                </tr>
+                <tr>
+                  <td>32</td>
+                  <td class="primary">GpsPackages / StandardPackage</td>
+                  <td>
+                    <span class="svc svc-T">T</span>allActivePackageListOfGpsTrackingService<span
+                      class="badge-get"
+                      >GET</span
+                    >
+                  </td>
+                  <td>mount</td>
+                  <td class="mono">
+                    [{ package_id, package_type, package_price, day_count, discount_amount, … }]
+                  </td>
+                  <td class="mono">state.packageList</td>
+                </tr>
+                <tr>
+                  <td>33</td>
+                  <td class="primary">GpsPackagePayment</td>
+                  <td><span class="svc svc-SSL">$</span>payment/init</td>
+                  <td>pay</td>
+                  <td class="mono">{ GatewayPageURL, … }</td>
+                  <td class="mono">redirect to SslCommercePanel</td>
+                </tr>
+                <tr>
+                  <td>34</td>
+                  <td class="primary">(device reset)</td>
+                  <td><span class="svc svc-T">T</span>resetGPSConfig</td>
+                  <td>after purchase/activation</td>
+                  <td class="mono">{ responseCode: 1000 }</td>
+                  <td class="mono">none (fire-and-forget)</td>
+                </tr>
+                <tr>
+                  <td>35</td>
+                  <td class="primary">SOSNumber</td>
+                  <td>
+                    <span class="svc svc-T">T</span>addEmergencyContact / editEmergencyContact
+                  </td>
+                  <td>save</td>
+                  <td class="mono">ack</td>
+                  <td class="mono">state.phoneNumber</td>
+                </tr>
+                <tr id="no-results-row" class="no-results-row is-hidden">
+                  <td colspan="6" class="no-results">No rows match that filter.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <!-- SEC9 -->
+        <section class="section section-full" id="sec-9">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§9</span>API system</div>
+            <h2 class="h-section">Quick index — "which API updates …?"</h2>
+            <p class="section-intro">
+              The fastest path from "why did this change on screen" to the line of code responsible.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 280px">I want to know why … changed</th>
+                  <th>Look at</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary">
+                    <strong>Engine status / ignition icon</strong> on the live map
+                  </td>
+                  <td class="mono">
+                    #5 <code>locationInfoAgainstImeiIDs</code> → <code>engine_status</code> →
+                    <code>truckObject.engineStatus</code> →
+                    <code>Utility_Functions.getGpsTrackerIgnitionStatus()</code> →
+                    <code>renderIgnitionStatusIcon()</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">
+                    <strong>Engine status</strong> in the dashboard bottom sheet
+                  </td>
+                  <td class="mono">
+                    #2 <code>truckInfo</code> → <code>GPSData[0].engine_status</code> →
+                    <code>state.engineStatus</code> / <code>state.ignition</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>Engine lock state</strong> (padlock warning)</td>
+                  <td class="mono">
+                    #5 <code>engine_locked</code> (live) and #16
+                    <code>updateEngineStatus</code> (command).
+                    <code>renderEngineLockedWarning()</code> shows when
+                    <code>engineLocked == 1 &amp;&amp; engineStatus != 'device_removed'</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>"Device removed" banner</strong></td>
+                  <td class="mono">
+                    #5 <code>engine_status === 'device_removed'</code> <strong>and</strong>
+                    <code>truckStatus === 'inactive'</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>active / inactive badge</strong></td>
+                  <td class="mono">
+                    <code>Utility_Functions.getGpsTrackerTruckStatus(item)</code> — computed from
+                    <code>packageData.purchase_status</code> +
+                    <code>locationData.engine_status</code>. <span class="icon-warn">⚠</span> On
+                    <code>GpsActiveMap</code> this comes from the route params / #7 and is
+                    <strong>not</strong> recomputed by the live loop.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>Speed</strong></td>
+                  <td class="mono">
+                    #5 <code>speed</code>; forced to <code>0</code> when
+                    <code>truckStatus === 'inactive'</code> (<code>getStatusWiseTruckSpeed()</code>)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>GSM signal bars</strong></td>
+                  <td class="mono">
+                    #5 <code>gsm_strength</code> → <code>GSMNetworkStatus</code> maps
+                    <code>no/extremely weak/very weak/good/strong signal</code> →
+                    <code>404/0/1/2/4</code> bars. Hidden for <code>basic</code> packages.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>GPS satellite icon</strong></td>
+                  <td class="mono">
+                    #5 <code>gps_tracking</code> (0 = <code>SatelliteOff</code>). Hidden for
+                    <code>basic</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>"Today's distance"</strong></td>
+                  <td class="mono">
+                    #8 <code>getMileageAgainstImeiID</code> → <code>daysMileage</code> (shown as
+                    <code>--</code> when null or <code>basic</code>)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>Last engine-off time</strong> caption</td>
+                  <td class="mono">
+                    #9 <code>lastStopTime</code> → <code>engine_off_time</code>, only when
+                    <code>truckStatus === 'inactive'</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>"Last update: …"</strong> line</td>
+                  <td class="mono">
+                    #5 <code>updated_on</code> + #6 <code>adressNameBangla</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>Stop list</strong> under the History tab</td>
+                  <td class="mono">#11 <code>stopInfo</code></td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>Playback route / seek bar / colours</strong></td>
+                  <td class="mono">
+                    #13 <code>getPlayBackLoationData</code> → native <code>locationObject</code>;
+                    engine-on/off colouring is derived natively in <code>onReady()</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>Playback report cards</strong></td>
+                  <td class="mono">
+                    #12 <code>stopInfo</code> (over-speed, hard-brake, engine-off) + #14
+                    <code>mileageDataAgainstTime</code> (distance)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><strong>Marker rotation / heading</strong></td>
+                  <td class="mono">
+                    Computed client-side:
+                    <code>Utility_Functions.getAngleFromLatLng(prev, next)</code> in
+                    <code>updateDataOnInterval</code>, then compensated for map heading in
+                    <code>AnimatedMarker.updateMapHeading()</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <!-- SEC10 -->
+        <section class="section section-full" id="sec-10">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§10</span>Reference</div>
+            <h2 class="h-section">Globals used by the GPS module</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 250px">Global</th>
+                  <th style="width: 230px">Set by</th>
+                  <th>Consumed by</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary"><code>global.globaltruckData</code></td>
+                  <td class="mono">GpsTrackerLandingPage.doneFetchingData</td>
+                  <td class="mono">Truck.getSingleTruck / getSingleTruckFromTruckNo</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalSingleTruck</code></td>
+                  <td class="mono">Truck.getSingleTruck</td>
+                  <td class="mono">
+                    payloads for stopInfo, getPlayBackLoationData, mileage, alerts, geofence
+                    (imei_id, updated_on, device_name, truck_id, packageData)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalMarkers</code></td>
+                  <td class="mono">Truck.getMerkerList</td>
+                  <td class="mono">GpsDashboardMap markers + markerPress index lookup</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalGpsTruckData</code></td>
+                  <td class="mono">GpsTrackerLandingPage.count</td>
+                  <td class="mono">getTruckListForGpsAccessShare()</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalImeiIDList</code></td>
+                  <td class="mono">Truck.getImeiIDList</td>
+                  <td class="mono">getInAppNotifications payload</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalTruckNumberList</code></td>
+                  <td class="mono">Truck.getMerkerList</td>
+                  <td class="mono">MenuBarDropDown truck switcher</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalAllGpsData</code></td>
+                  <td class="mono">Gps.getGpsPlaybackLocationData</td>
+                  <td class="mono">over-speed count helper</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalSpeedLimitArray</code></td>
+                  <td class="mono">app bootstrap</td>
+                  <td class="mono">share-location duration options</td>
+                </tr>
+                <tr>
+                  <td class="primary"><code>global.globalCustomerCareNumber</code></td>
+                  <td class="mono">app bootstrap</td>
+                  <td class="mono">"Call for update" buttons</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="subsection">
+            <p>
+              Cross-screen refresh is done with <code>DeviceEventEmitter</code>:
+              <code>gpsShareNotify</code>, <code>truckShareListUpdate</code>,
+              <code>updateGlobalList</code>, <code>gpsLockUnlockStatusUpdated</code>,
+              <code>hideRedDot</code>, <code>onCustomMapViewLoadedComplete</code> (native → JS).
+            </p>
+          </div>
+        </section>
+        <!-- SEC11 -->
+        <section class="section" id="sec-11">
+          <div class="eyebrow"><span class="num">§11</span>Reference</div>
+          <h2 class="h-section">Gotchas, dead code and footguns</h2>
+          <p class="section-intro">
+            Read this section twice. This is what separates "it compiled" from "it works."
+          </p>
+
+          <div class="callout callout-warn">
+            <div class="ic num-badge-warn">01</div>
+            <p>
+              <strong>Dead code in GpsActiveMap</strong> — <code>animate(newCoordinate)</code>,
+              <code>renderCurrentLocationView()</code> and <code>onPressCurrentLocation()</code> are
+              never called. <code>checkDistanceAndAnimate</code> in the base class is only reachable
+              through <code>animate()</code>, so it is dead too. Left over from the pre-<code
+                >AnimatedMarker</code
+              >
+              bridge.
+            </p>
+          </div>
+
+          <div class="callout callout-warn">
+            <div class="ic num-badge-warn">02</div>
+            <p>
+              <strong><code>GpsTrackerBaseComponent.js</code> is not the base class.</strong> The
+              real one is <code>views/GpsBaseComponent/index.js</code>.
+            </p>
+          </div>
+
+          <div class="callout callout-danger">
+            <div class="ic num-badge-danger">03</div>
+            <p>
+              <strong
+                ><code>resetValueOnDropdown()</code> mutates
+                <code>this.state</code> directly</strong
+              >
+              and assigns to an undeclared <code>allLocation</code> (implicit global). Do not copy
+              this pattern.
+            </p>
+          </div>
+
+          <div class="callout callout-warn">
+            <div class="ic num-badge-warn">04</div>
+            <p>
+              <strong>The loading modal is gated by three independent flags.</strong> Any new API
+              added to the marker-press / mount path must either set its flag or the loader hangs.
+              See <code>getFetchFlag()</code> in §4.
+            </p>
+          </div>
+
+          <div class="callout callout-danger">
+            <div class="ic num-badge-danger">05</div>
+            <p>
+              <strong><code>truckObject</code> is mutated, not <code>setState</code>-d.</strong> The
+              header only repaints because <code>setState({region, markerRotation})</code> happens
+              in the same function. If you add a field to <code>truckObject</code> and no
+              <code>setState</code> follows, the UI will not update.
+            </p>
+          </div>
+
+          <div class="callout callout-warn">
+            <div class="ic num-badge-warn">06</div>
+            <p>
+              <strong><code>truckStatus</code> is stale on the live map.</strong> The loop refreshes
+              <code>engineStatus</code> but never recomputes <code>truckStatus</code>, so the
+              active/inactive badge can disagree with the ignition icon until the screen is reopened
+              or the truck is re-picked from the dropdown.
+            </p>
+          </div>
+
+          <div class="callout callout-danger">
+            <div class="ic num-badge-danger">07</div>
+            <p>
+              <strong>Native map guards.</strong> Every <code>mapViewRef</code> call is wrapped in
+              <code>if (this.mapViewRef &amp;&amp; this.mapIsReady)</code>. Removing these guards
+              reintroduces the native crashes noted in <code>componentWillUnmount</code>.
+            </p>
+          </div>
+
+          <div class="callout callout-warn">
+            <div class="ic num-badge-warn">08</div>
+            <p>
+              <strong><code>AnimatedMarker.polylineCoordinates</code> grows unbounded</strong> for
+              the life of the screen — one entry per animation frame. It is only cleared by
+              <code>stopAnimatingMarkerAlongPolyline()</code> (unmount / truck switch).
+            </p>
+          </div>
+
+          <div class="callout callout-warn">
+            <div class="ic num-badge-warn">09</div>
+            <p>
+              <strong><code>MapView key={this.truckObject.imei_id}</code></strong> forces a full
+              native map remount when the truck changes. That is why <code>mapIsReady</code> /
+              <code>mapViewRef</code> are reset to <code>false</code> / <code>null</code> in
+              <code>selectDropDown</code>.
+            </p>
+          </div>
+
+          <div class="callout callout-warn">
+            <div class="ic num-badge-warn">10</div>
+            <p>
+              <strong><code>GpsDemo/</code> and <code>GpsTrackerDemo/</code></strong> are
+              near-duplicate trees used for the demo walkthrough (<code>isGpsDemo = true</code>).
+              Changes to the real screens are <strong>not</strong> automatically reflected there.
+            </p>
+          </div>
+        </section>
+        <!-- SEC12 -->
+        <section class="section section-full" id="sec-12">
+          <div class="subsection">
+            <div class="eyebrow"><span class="num">§12</span>Reference</div>
+            <h2 class="h-section">File map</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="ref-table">
+              <thead>
+                <tr>
+                  <th style="width: 220px">Concern</th>
+                  <th>Path</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="primary">Routes</td>
+                  <td class="mono">app/navigation/MainNavigator.js</td>
+                </tr>
+                <tr>
+                  <td class="primary">Base class</td>
+                  <td class="mono">app/views/GpsBaseComponent/index.js</td>
+                </tr>
+                <tr>
+                  <td class="primary">Live map</td>
+                  <td class="mono">app/views/Gps/GpsActiveMap.js</td>
+                </tr>
+                <tr>
+                  <td class="primary">Animated marker</td>
+                  <td class="mono">app/components/GPSMarker/AnimatedMarker/AnimatedMarker.js</td>
+                </tr>
+                <tr>
+                  <td class="primary">Fleet map</td>
+                  <td class="mono">app/views/GpsTracker/GpsDashboardMap.js</td>
+                </tr>
+                <tr>
+                  <td class="primary">Landing / lists</td>
+                  <td class="mono">app/views/GpsTracker/</td>
+                </tr>
+                <tr>
+                  <td class="primary">Playback (JS)</td>
+                  <td class="mono">app/views/Gps/Playback/</td>
+                </tr>
+                <tr>
+                  <td class="primary">Playback (native)</td>
+                  <td class="mono">
+                    android/app/src/main/java/tg/truckowner/CustomMapView.java,
+                    CustomMapViewModule.java
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">Native bridge (JS)</td>
+                  <td class="mono">app/components/NativeComponent/index.js</td>
+                </tr>
+                <tr>
+                  <td class="primary">Models</td>
+                  <td class="mono">
+                    app/model/Gps.js, Truck.js, StopLocation.js, Geofencing.js, SosEmegency.js,
+                    Notifications.js
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">Transport / URLs</td>
+                  <td class="mono">app/services/functions.js</td>
+                </tr>
+                <tr>
+                  <td class="primary">Status helpers</td>
+                  <td class="mono">
+                    app/modules/utility_functions.js (getGpsTrackerTruckStatus,
+                    getGpsTrackerIgnitionStatus, getAngleFromLatLng, getHaversineDistance,
+                    createDummyGPSDataAgainstTime, getGPSStopListAlongWithDurationData)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="primary">GPS feature widgets</td>
+                  <td class="mono">app/components/GpsFeature/GpsFeatureComponents.js</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <footer class="page-footer">
+          GPS Live Tracking — Developer Guide · TlReactOwner · generated for internal onboarding
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>
