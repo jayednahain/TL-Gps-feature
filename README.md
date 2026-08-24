@@ -24,6 +24,8 @@ python3 -m http.server 8000
 
 The site is deployed by `.github/workflows/pages.yml` on every push to `main`.
 
-One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+The workflow enables Pages itself (`configure-pages` with `enablement: true`), so no
+manual setup is needed. If it ever fails to, set it by hand at
+**Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
 Live URL: https://jayednahain.github.io/TL-Gps-feature/
